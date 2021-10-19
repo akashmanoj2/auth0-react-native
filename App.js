@@ -38,6 +38,7 @@ const App = () => {
       })
       .then(credentials => {
         setAcccessToken(credentials.accessToken);
+        console.log('accessToken: ', credentials.accessToken);
         showToast('Access token set !');
       })
       .catch(error => {
