@@ -1,54 +1,86 @@
-import React, {useState} from 'react';
-import Auth0 from 'react-native-auth0';
+import React, {useState, useEffect} from 'react';
 import {Alert, ToastAndroid, StyleSheet, Text, View} from 'react-native';
 import axios from 'axios';
 import {DataTable, TextInput, Button} from 'react-native-paper';
+import auth from '@react-native-firebase/auth';
 
-const MobileLogin = () => {
-  const auth0 = new Auth0({
-    domain: 'dev-qro6os72.us.auth0.com',
-    clientId: 'Mk8ifH5fjUoAInyAoWOc1dTGPymxLzXT',
-  });
-
-  const [accessToken, setAcccessToken] = useState(null);
+const FirebaseLogin = () => {
   const [genres, setGenres] = useState(null);
   const [mobileNumber, setMobileNumber] = useState(null);
-  const [isOtpSend, setIsOtpSend] = useState(false);
+  const [loggedIn, setLoggedIn] = useState(false);
   const [otp, setOtp] = useState(null);
+  const [confirm, setConfirm] = useState(null);
+  const [token, setToken] = useState(null);
 
-  const _onLogin = () => {
-    auth0.auth
-      .loginWithSMS({
-        phoneNumber: '+91' + mobileNumber,
-        code: otp,
-        audience: 'https://dev-qro6os72.us.auth0.com/api/v2/',
-        scope: 'offline_access openid profile email',
-      })
-      .then(credentials => {
-        setAcccessToken(credentials.accessToken);
-        setOtp(null);
-        console.log('accessToken: ', credentials.accessToken);
-        console.log('refreshToken: ', credentials.refreshToken);
-        showToast('Access token set !');
-      })
-      .catch(error => {
-        console.log(error);
-        showToast('Error occured and logged!');
-      });
+  // Handle user state changes
+  const onAuthStateChanged = loggedInUser => {
+    console.log('returned user: ', loggedInUser);
+    if (loggedInUser) {
+      auth()
+        .currentUser.getIdToken()
+        .then(idToken => {
+          setToken(idToken);
+          setLoggedIn(true);
+          showToast('Token set !');
+        })
+        .catch(error => {
+          console.log('Error occured while retreiving token: ', error);
+          showToast('Error occured !');
+        });
+    } else {
+      setToken(null);
+      setLoggedIn(false);
+    }
+  };
+
+  useEffect(() => {
+    const subscriber = auth().onAuthStateChanged(onAuthStateChanged);
+    return subscriber; // unsubscribe on unmount
+  }, []);
+
+  const sendOtp = async () => {
+    try {
+      const confirmation = await auth().signInWithPhoneNumber(
+        '+91' + mobileNumber,
+      );
+      setConfirm(confirmation);
+      showToast('OTP send');
+    } catch (error) {
+      showToast('Error occured!');
+      console.log('Error in sending OTP: ', error);
+    }
+  };
+
+  const _onLogin = async () => {
+    try {
+      await confirm.confirm(otp);
+      setOtp(null);
+    } catch (error) {
+      console.log('Error in login : ', error);
+      showToast('Invalid code!');
+    }
   };
 
   const _onLogout = () => {
-    setAcccessToken(null);
-    setGenres(null);
-    setIsOtpSend(false);
-    setMobileNumber(null);
-    Alert.alert('Logged out!');
+    auth()
+      .signOut()
+      .then(() => {
+        setGenres(null);
+        setConfirm(null);
+        setMobileNumber(null);
+        Alert.alert('Logged out!');
+      })
+      .catch(error => {
+        console.log('Error during logout: ', error);
+        showToast('Error occured !');
+      });
   };
 
   const getMovieGenresFromApi = () => {
+    console.log('accessToken: ', token);
     axios
-      .get('http://10.0.2.2:3000/api/genres', {
-        headers: {Authorization: `Bearer ${accessToken}`},
+      .get('http://10.0.2.2:3000/api/genres/firebase', {
+        headers: {Authorization: `Bearer ${token}`},
       })
       .then(res => {
         console.log('response:', res.data);
@@ -56,8 +88,8 @@ const MobileLogin = () => {
         setGenres(res.data);
       })
       .catch(error => {
-        console.log('error: ', error);
-        showToast('Error occured and logged!');
+        console.log('error occured during api call: ', error);
+        showToast('Error occured !');
       });
   };
 
@@ -91,21 +123,9 @@ const MobileLogin = () => {
     );
   };
 
-  const sendOtp = () => {
-    auth0.auth
-      .passwordlessWithSMS({
-        phoneNumber: '+91' + mobileNumber,
-      })
-      .then(result => {
-        setIsOtpSend(true);
-        console.log(result);
-      })
-      .catch(console.error);
-  };
-
   return (
     <View style={styles.container}>
-      <Text> You are{accessToken ? ' ' : ' not '} logged in .</Text>
+      <Text> You are{loggedIn ? ' ' : ' not '} logged in .</Text>
       <View style={styles.inputSection}>
         <TextInput
           label="Mobile Number"
@@ -115,17 +135,17 @@ const MobileLogin = () => {
           onChangeText={text => setMobileNumber(text)}
         />
         <Button
-          disabled={accessToken || !mobileNumber}
+          disabled={loggedIn || !mobileNumber}
           style={styles.actionButtons}
           mode="contained"
           onPress={sendOtp}>
-          {isOtpSend ? 'Resend OTP' : 'Send OTP'}
+          {confirm ? 'Resend OTP' : 'Send OTP'}
         </Button>
       </View>
 
-      {isOtpSend && (
+      {(loggedIn || confirm) && (
         <View style={styles.inputSection}>
-          {!accessToken && (
+          {!loggedIn && (
             <TextInput
               mode="outlined"
               label="Enter OTP"
@@ -136,13 +156,22 @@ const MobileLogin = () => {
           <Button
             style={styles.actionButtons}
             mode="contained"
-            onPress={accessToken ? _onLogout : _onLogin}>
-            {accessToken ? 'Log out' : 'Log in'}
+            onPress={loggedIn ? _onLogout : _onLogin}>
+            {loggedIn ? 'Log out' : 'Log in'}
           </Button>
         </View>
       )}
 
-      {accessToken && (
+      {/* {loggedIn && (
+        <Button
+          style={styles.actionButtons}
+          mode="contained"
+          onPress={_onLogout}>
+          Log out
+        </Button>
+      )} */}
+
+      {loggedIn && (
         <Button
           style={styles.actionButtons}
           mode="contained"
@@ -173,4 +202,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default MobileLogin;
+export default FirebaseLogin;
