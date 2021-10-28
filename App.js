@@ -13,6 +13,7 @@ import WebLogin from './screens/WebLogin';
 import MobileLogin from './screens/MobileLogin';
 import FirebaseLogin from './screens/FirebaseLogin';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import AwsLogin from './screens/AwsLogin';
 
 const Tab = createBottomTabNavigator();
 
@@ -30,6 +31,8 @@ const App = () => {
               iconName = 'open-in-browser';
             } else if (route.name === 'Firebase') {
               iconName = 'local-fire-department';
+            } else if (route.name === 'AWS') {
+              iconName = 'sms';
             }
 
             return <Icon name={iconName} size={size} color={color} />;
@@ -41,6 +44,7 @@ const App = () => {
         <Tab.Screen name="Auth0 Web" component={WebLogin} />
         <Tab.Screen name="Autho0 SMS" component={MobileLogin} />
         <Tab.Screen name="Firebase" component={FirebaseLogin} />
+        <Tab.Screen name="AWS" component={AwsLogin} />
       </Tab.Navigator>
     </NavigationContainer>
   );
